@@ -13,17 +13,22 @@ resource "docker_container" "vpn_gateway" {
   name    = "wireguard"
   restart = "unless-stopped"
 
+  upload {
+    file    = "/config/wg0.conf"
+    content = templatefile("${path.module}/wireguard.tftpl", {
+      private_key      = wireguard_asymmetric_key.peer.private_key
+      peer_public_key  = local.mullvad_peer_relay.public_key
+      peer_endpoint_ip = local.mullvad_peer_relay.ipv4_address
+      ipv4_address     = mullvad_wireguard.peer.ipv4_address
+      ipv6_address     = mullvad_wireguard.peer.ipv6_address
+      dns              = "8.8.8.8"
+    })
+  }
+
   volumes {
     host_path      = "/lib/modules"
     container_path = "/lib/modules"
     read_only      = true
-  }
-
-// TODO automatically generate wireguard config from managed mullvad resources
-// https://www.linuxserver.io/blog/routing-docker-host-and-container-traffic-through-wireguard
-  volumes {
-    host_path      = "/media/datahoarder/wireguard"
-    container_path = "/config"
   }
 
   ports {
