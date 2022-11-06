@@ -3,9 +3,15 @@ resource "docker_network" "vpn" {
   driver = "bridge"
 }
 
+data "docker_registry_image" "wireguard" {
+  name = "linuxserver/wireguard"
+}
+
+// TODO provider bug causes docker image update to trigger every run
+// https://github.com/kreuzwerker/terraform-provider-docker/issues/426
 resource "docker_image" "wireguard" {
-  name = "lscr.io/linuxserver/wireguard:latest"
-  // TODO pull triggers for auto update
+  name = data.docker_registry_image.wireguard.name
+  pull_triggers = [data.docker_registry_image.wireguard.sha256_digest]
 }
 
 resource "docker_container" "vpn_gateway" {
