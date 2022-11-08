@@ -1,9 +1,11 @@
 [Interface]
 PrivateKey = ${private_key}
-Address = ${ipv4_address},${ipv6_address}
+Address = ${tunnel_address}
 DNS = ${dns}
+PostUp = iptables -t nat -A POSTROUTING -o wg+ -j MASQUERADE
+PreDown = iptables -t nat -D POSTROUTING -o wg+ -j MASQUERADE
 
 [Peer]
-PublicKey = ${peer_public_key}
+PublicKey = ${endpoint_public_key}
 AllowedIPs = 0.0.0.0/0,::0/0
-Endpoint = ${peer_endpoint_ip}:51820
+Endpoint = ${endpoint_address}:51820

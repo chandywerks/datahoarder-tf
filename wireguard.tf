@@ -1,6 +1,6 @@
-resource "docker_network" "vpn" {
-  name   = "vpn"
-  driver = "bridge"
+resource "docker_network" "vpn_gateway" {
+  name         = "vpn-gateway"
+  driver       = "bridge"
 }
 
 data "docker_registry_image" "wireguard" {
@@ -22,12 +22,11 @@ resource "docker_container" "vpn_gateway" {
   upload {
     file    = "/config/wg0.conf"
     content = templatefile("${path.module}/wireguard.tftpl", {
-      private_key      = wireguard_asymmetric_key.peer.private_key
-      peer_public_key  = local.mullvad_peer_relay.public_key
-      peer_endpoint_ip = local.mullvad_peer_relay.ipv4_address
-      ipv4_address     = mullvad_wireguard.peer.ipv4_address
-      ipv6_address     = mullvad_wireguard.peer.ipv6_address
-      dns              = "8.8.8.8"
+      private_key          = wireguard_asymmetric_key.peer.private_key
+      endpoint_public_key  = local.mullvad_peer_relay.public_key
+      endpoint_address     = local.mullvad_peer_relay.ipv4_address
+      tunnel_address       = mullvad_wireguard.peer.ipv4_address
+      dns                  = "8.8.8.8"
     })
   }
 
