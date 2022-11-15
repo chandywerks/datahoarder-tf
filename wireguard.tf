@@ -1,27 +1,30 @@
-resource "docker_network" "vpn_gateway" {
-  name         = "vpn-gateway"
-  driver       = "bridge"
+resource "kubernetes_service" "vpn_gateway" {
+  metadata {
+    name = "vpn-gateway"
+  }
+
+  spec {
+    port {
+      port        = 51820
+      target_port = 51820
+      protocol    = "UDP"
+    }
+
+    type = "LoadBalancer"
+
+    selector = {
+      name = "wireguard"
+    }
+  }
 }
 
-data "docker_registry_image" "wireguard" {
-  name = "linuxserver/wireguard"
-}
+resource "kubernetes_config_map" "wireguard" {
+  metadata {
+    name = "wireguard-conf"
+  }
 
-// TODO provider bug causes docker image update to trigger every run
-// https://github.com/kreuzwerker/terraform-provider-docker/issues/426
-resource "docker_image" "wireguard" {
-  name = data.docker_registry_image.wireguard.name
-  pull_triggers = [data.docker_registry_image.wireguard.sha256_digest]
-}
-
-resource "docker_container" "vpn_gateway" {
-  image   = docker_image.wireguard.name
-  name    = "wireguard"
-  restart = "unless-stopped"
-
-  upload {
-    file    = "/config/wg0.conf"
-    content = templatefile("${path.module}/wireguard.tftpl", {
+  data = {
+    "wg0.conf" = templatefile("${path.module}/wireguard.tftpl", {
       private_key          = wireguard_asymmetric_key.peer.private_key
       endpoint_public_key  = local.mullvad_peer_relay.public_key
       endpoint_address     = local.mullvad_peer_relay.ipv4_address
@@ -29,31 +32,110 @@ resource "docker_container" "vpn_gateway" {
       dns                  = "8.8.8.8"
     })
   }
+}
 
-  volumes {
-    host_path      = "/lib/modules"
-    container_path = "/lib/modules"
-    read_only      = true
+resource "kubernetes_deployment" "wireguard" {
+  metadata {
+    name = "wireguard"
+    labels = {
+      name = "wireguard"
+    }
   }
 
-  ports {
-    internal  = 51820
-    external  = 51820
-    protocol  = "udp"
-  }
+  spec {
+    selector {
+      match_labels = {
+        name = "wireguard"
+      }
+    }
 
-  env = [
-    "PUID=1000",
-    "PGID=1000",
-    "TZ=America/New_York" // TODO config file
-  ]
+    template {
+      metadata {
+        labels = {
+          name = "wireguard"
+        }
+      }
 
-  capabilities {
-    add = ["SYS_MODULE", "NET_ADMIN"]
-  }
+      spec {
+        volume {
+          name = "wireguard-conf"
 
-  sysctls = {
-    "net.ipv4.conf.all.src_valid_mark" = 1
-    "net.ipv6.conf.all.disable_ipv6"   = 0
+          config_map {
+            name         = "wireguard-conf"
+            default_mode = "0644"
+
+            items {
+              key  = "wg0.conf"
+              path = "wg0.conf"
+            }
+          }
+        }
+
+        volume {
+          name = "kernel-modules"
+
+          host_path {
+            path = "/lib/modules"
+            type = "Directory"
+          }
+        }
+
+        security_context {
+          fs_group = 1000
+
+          sysctl {
+            name = "net.ipv4.conf.all.src_valid_mark"
+            value = 1
+          }
+
+          /*
+          sysctl {
+            name = "net.ipv6.conf.all.disable_ipv6"
+            value = 0
+          }
+          */
+        }
+
+        container {
+          image = "linuxserver/wireguard:latest"
+          name  = "wireguard"
+
+          volume_mount {
+            name       = "wireguard-conf"
+            mount_path = "/config/wg0.conf"
+            sub_path   = "wg0.conf"
+          }
+
+          volume_mount {
+            name       = "kernel-modules"
+            mount_path = "/lib/modules"
+            read_only  = true
+          }
+
+          security_context {
+            privileged   = true
+
+            capabilities {
+              add = ["SYS_MODULE", "NET_ADMIN"]
+            }
+          }
+
+          env {
+            name = "PUID"
+            value = "1000"
+          }
+
+          env {
+            name = "PGID"
+            value = "1000"
+          }
+
+          env {
+            name = "TZ"
+            value = "America/New_York"
+          }
+        }
+      }
+    }
   }
 }
