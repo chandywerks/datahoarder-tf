@@ -81,28 +81,28 @@ resource "kubernetes_deployment" "wireguard" {
         }
 
         security_context {
-          fs_group = 1000
-
           sysctl {
             name = "net.ipv4.conf.all.src_valid_mark"
             value = 1
           }
-
-          /*
-          sysctl {
-            name = "net.ipv6.conf.all.disable_ipv6"
-            value = 0
-          }
-          */
         }
 
         container {
           image = "linuxserver/wireguard:latest"
           name  = "wireguard"
 
+          lifecycle {
+            post_start {
+              exec {
+                # https://github.com/linuxserver/docker-wireguard/issues/205#issuecomment-1308591466
+                command = ["cp", "/tmp/wg0.conf", "/config"]
+              }
+            }
+          }
+
           volume_mount {
             name       = "wireguard-conf"
-            mount_path = "/config/wg0.conf"
+            mount_path = "/tmp/wg0.conf"
             sub_path   = "wg0.conf"
           }
 

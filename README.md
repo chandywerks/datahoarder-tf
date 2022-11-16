@@ -15,29 +15,23 @@ sudo install k3sup /usr/local/bin/
 k3sup install --local --local-path ~/.kube/config
 ```
 
-Edit the `ExecStart` in the k3s config to enable sysctls for wireguard
+- Enable ipv4 systctls (required for wireguard)
+
+Edit the k3s config
 
 ```sh
 sudo vi /etc/systemd/system/k3s.service
 ```
 
+Add this line under `ExecStart`
+
 ```
-'--kubelet-arg=allowed-unsafe-sysctls=net.ipv4.conf.all.src_valid_mark' \
+'--kubelet-arg=allowed-unsafe-sysctls=net.ipv4.*' \
 ```
 
-Then restart the service
+Restart k3s
 
 ```sh
 sudo systemctl daemon-reload
 sudo systemctl restart k3s.service
 ```
-
-Test your cluster with
-
-```sh
-export KUBECONFIG=/home/chris/.kube/config
-kubectl config use-context default
-kubectl get node -o wide
-```
-
-/usr/local/bin/k3s-killall.sh
